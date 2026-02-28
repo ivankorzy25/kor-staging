@@ -3905,42 +3905,171 @@ document.addEventListener('DOMContentLoaded', () => {
   korShop.init();
 });
 
-// ===== VANTA.JS 3D INTERACTIVE BACKGROUND =====
+// ===== ENERGY PLASMA SHADER - INTERACTIVE 3D BACKGROUND =====
 (function() {
-  function loadScript(src, cb) {
-    var s = document.createElement('script');
-    s.src = src; s.onload = cb; s.async = true;
-    document.head.appendChild(s);
-  }
-  function initVanta() {
-    if (typeof VANTA === 'undefined' || !VANTA.NET) return;
-    var el = document.getElementById('vanta-hero-bg');
-    if (!el) return;
-    // Enable pointer events so Vanta can track mouse
-    el.style.pointerEvents = 'auto';
-    try {
-      window._vantaEffect = VANTA.NET({
-        el: el,
-        mouseControls: true,
-        touchControls: true,
-        gyroControls: false,
-        minHeight: 200,
-        minWidth: 200,
-        scale: 1.0,
-        scaleMobile: 1.0,
-        color: 0xFF6B00,
-        backgroundColor: 0x0f0f1a,
-        points: 9,
-        maxDistance: 22,
-        spacing: 18,
-        showDots: true
-      });
-    } catch(e) { console.warn('Vanta init error:', e); }
-  }
-  // Load Three.js then Vanta NET
-  loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js', function() {
-    loadScript('https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js', initVanta);
+  var container = document.getElementById('vanta-hero-bg');
+  if (!container) return;
+  var canvas = document.createElement('canvas');
+  canvas.style.cssText = 'width:100%;height:100%;display:block;';
+  container.appendChild(canvas);
+  container.style.pointerEvents = 'auto';
+
+  var gl = canvas.getContext('webgl', {alpha: true, antialias: false, preserveDrawingBuffer: false});
+  if (!gl) return;
+
+  var mouse = {x: 0.5, y: 0.5, tx: 0.5, ty: 0.5};
+  container.addEventListener('mousemove', function(e) {
+    var r = container.getBoundingClientRect();
+    mouse.tx = (e.clientX - r.left) / r.width;
+    mouse.ty = 1.0 - (e.clientY - r.top) / r.height;
   });
+  container.addEventListener('touchmove', function(e) {
+    var t = e.touches[0], r = container.getBoundingClientRect();
+    mouse.tx = (t.clientX - r.left) / r.width;
+    mouse.ty = 1.0 - (t.clientY - r.top) / r.height;
+  }, {passive: true});
+
+  var VS = 'attribute vec2 a_pos;void main(){gl_Position=vec4(a_pos,0,1);}';
+  var FS = [
+    'precision highp float;',
+    'uniform float u_time;',
+    'uniform vec2 u_res;',
+    'uniform vec2 u_mouse;',
+    // Simplex-like noise
+    'vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}',
+    'vec2 mod289(vec2 x){return x-floor(x*(1./289.))*289.;}',
+    'vec3 permute(vec3 x){return mod289(((x*34.)+1.)*x);}',
+    'float snoise(vec2 v){',
+    '  const vec4 C=vec4(.211324865,.366025404,-.577350269,.024390244);',
+    '  vec2 i=floor(v+dot(v,C.yy));vec2 x0=v-i+dot(i,C.xx);',
+    '  vec2 i1;i1=(x0.x>x0.y)?vec2(1,0):vec2(0,1);',
+    '  vec4 x12=x0.xyxy+C.xxzz;x12.xy-=i1;',
+    '  i=mod289(i);vec3 p=permute(permute(i.y+vec3(0,i1.y,1))+i.x+vec3(0,i1.x,1));',
+    '  vec3 m=max(.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.);',
+    '  m=m*m;m=m*m;',
+    '  vec3 x=2.*fract(p*C.www)-1.;vec3 h=abs(x)-.5;',
+    '  vec3 ox=floor(x+.5);vec3 a0=x-ox;',
+    '  m*=1.79284291400159-.85373472095314*(a0*a0+h*h);',
+    '  vec3 g;g.x=a0.x*x0.x+h.x*x0.y;g.yz=a0.yz*x12.xz+h.yz*x12.yw;',
+    '  return 130.*dot(m,g);',
+    '}',
+    // FBM (fractal brownian motion)
+    'float fbm(vec2 p){',
+    '  float f=0.,a=.5;',
+    '  for(int i=0;i<5;i++){f+=a*snoise(p);p*=2.1;a*=.48;}',
+    '  return f;',
+    '}',
+    'void main(){',
+    '  vec2 uv=gl_FragCoord.xy/u_res;',
+    '  float aspect=u_res.x/u_res.y;',
+    '  vec2 p=vec2(uv.x*aspect,uv.y);',
+    '  float t=u_time*.15;',
+    // Mouse influence - energy vortex
+    '  vec2 mp=vec2(u_mouse.x*aspect,u_mouse.y);',
+    '  float md=length(p-mp);',
+    '  float mInfluence=.35/(md+.15);',
+    // Flowing energy plasma
+    '  float n1=fbm(p*2.5+vec2(t*.7,t*.5)+mInfluence*.3);',
+    '  float n2=fbm(p*3.2+vec2(-t*.6,t*.8)+vec2(n1*.4));',
+    '  float n3=fbm(p*1.8+vec2(t*.4,-t*.3)+vec2(n2*.3,n1*.2));',
+    // Electric arcs near mouse
+    '  float arc=snoise(p*8.+vec2(t*3.,0.))*snoise(p*12.+vec2(0.,t*2.5));',
+    '  arc=pow(max(arc,0.),.8)*exp(-md*3.)*1.5;',
+    // Color mixing: orange energy + blue electric + white hot spots
+    '  vec3 orange=vec3(1.,.42,0.);',    // #FF6B00
+    '  vec3 deepOrange=vec3(.8,.25,0.);',
+    '  vec3 blue=vec3(0.,.5,1.);',
+    '  vec3 cyan=vec3(0.,.8,.9);',
+    '  vec3 white=vec3(1.,.95,.9);',
+    // Layer blending
+    '  float energy=n1*.5+n2*.3+n3*.2;',
+    '  energy=energy*.5+.5;',
+    '  energy=smoothstep(.25,.85,energy);',
+    // Base color mix
+    '  vec3 col=mix(deepOrange,orange,energy);',
+    '  col=mix(col,blue,smoothstep(.4,.8,n2*.5+.5)*.25);',
+    '  col=mix(col,cyan,arc*.6);',
+    '  col=mix(col,white,pow(energy,4.)*.5);',
+    // Mouse glow
+    '  float glow=exp(-md*md*8.)*.4;',
+    '  col+=orange*glow+white*glow*.3;',
+    // Arc highlights
+    '  col+=white*arc*.4;',
+    // Overall intensity and fade to dark edges
+    '  float intensity=energy*.35+arc*.2+glow*.5;',
+    '  float vignette=1.-length(uv-.5)*1.2;',
+    '  vignette=smoothstep(0.,.8,vignette);',
+    '  col*=intensity*vignette;',
+    // Background: dark with slight gradient
+    '  vec3 bg=mix(vec3(.059,.059,.102),vec3(.176,.102,.039),uv.x*.3);',
+    '  col=bg+col*.7;',
+    // Subtle scan lines for tech feel
+    '  col*=.97+.03*sin(gl_FragCoord.y*1.5);',
+    '  gl_FragColor=vec4(col,1.);',
+    '}'
+  ].join('\n');
+
+  function createShader(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.warn('Shader error:', gl.getShaderInfoLog(s)); return null;
+    }
+    return s;
+  }
+  var vs = createShader(gl.VERTEX_SHADER, VS);
+  var fs = createShader(gl.FRAGMENT_SHADER, FS);
+  if (!vs || !fs) return;
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+  gl.linkProgram(prog); gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  var aPos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  var uTime = gl.getUniformLocation(prog, 'u_time');
+  var uRes = gl.getUniformLocation(prog, 'u_res');
+  var uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.5); // Cap DPR for perf
+    var w = container.clientWidth, h = container.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  var startTime = Date.now();
+  var running = true;
+  function render() {
+    if (!running) return;
+    // Smooth mouse lerp
+    mouse.x += (mouse.tx - mouse.x) * 0.05;
+    mouse.y += (mouse.ty - mouse.y) * 0.05;
+
+    gl.uniform1f(uTime, (Date.now() - startTime) * 0.001);
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+
+  // Only run when hero is visible (IntersectionObserver for perf)
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function(entries) {
+      running = entries[0].isIntersecting;
+      if (running) render();
+    }, {threshold: 0.01});
+    obs.observe(container);
+  } else {
+    render();
+  }
 })();
 </script>
 
