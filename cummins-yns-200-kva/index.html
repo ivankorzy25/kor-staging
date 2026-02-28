@@ -1549,6 +1549,12 @@ body { background: var(--kor-light-bg); }
   position: relative;
   overflow: hidden;
 }
+#vanta-hero-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+}
 .kor-hero-bg::before {
   content: '';
   position: absolute;
@@ -1558,6 +1564,7 @@ body { background: var(--kor-light-bg); }
   height: 700px;
   background: radial-gradient(circle, rgba(255,107,0,0.12) 0%, transparent 70%);
   pointer-events: none;
+  z-index: 1;
 }
 .kor-hero-bg::after {
   content: '';
@@ -1568,8 +1575,11 @@ body { background: var(--kor-light-bg); }
   height: 500px;
   background: radial-gradient(circle, rgba(0,150,255,0.06) 0%, transparent 70%);
   pointer-events: none;
+  z-index: 1;
 }
 .kor-hero-content {
+  position: relative;
+  z-index: 2;
   max-width: 1320px;
   margin: 0 auto;
   padding: 0 20px;
@@ -2548,7 +2558,7 @@ body { background: var(--kor-light-bg); }
         </div>
         <div class="cover-right">
             <div class="cover-glow"></div>
-            <img src="/kor-staging/img/TTA_large_160A.jpg" alt="TTA CUMMINS YNS 200 KVA">
+            <img src="/kor-staging/files/TTA_large_160A.jpg" alt="TTA CUMMINS YNS 200 KVA">
         </div>
     </div>
     <div class="cover-footer">
